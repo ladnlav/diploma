@@ -121,12 +121,12 @@ def Upconversion(signal, N, ups, rrc, Fc,Fs_analog):
 
 def main():
     ### Parameters setting
-    Fc1 = 20e6 # in Hz n25 band carrier frequency
-    Fc2 = 30e6 # in Hz n66 band carrier frequency
+    Fc1 = 790e6 # in Hz n25 band carrier frequency
+    Fc2 = 820e6 # in Hz n66 band carrier frequency
 
-    B = 2.5e6 # bandwidth in Hz    
+    B = 5e6 # bandwidth in Hz    
     K = 64 # number of OFDM subcarriers
-    Fs_analog = 100*Fc1    # the sampling frequency we use for the discrete simulation of "analog" signals during upconversion
+    Fs_analog = 4*Fc1    # the sampling frequency we use for the discrete simulation of "analog" signals during upconversion
     df = B/K           # scs
     Tu = 1/df      # OFDM symb period
     Ts = Tu/K      # the baseband samples are Ts seconds apart.
@@ -137,8 +137,8 @@ def main():
     N = K+CP           # number of transmitted baseband samples
 
     ### Power
-    Sig_pow_dB = 100 # signal power in dB
-    noise_dB = 60+50  # noise power
+    Sig_pow_dB = 90 # signal power in dB
+    noise_dB = 28+50  # noise power -- 28???
 
     ### Carrier arrangement
     allCarriers = np.arange(K)  # indices of all subcarriers ([0, 1, ... K-1])
@@ -179,23 +179,23 @@ def main():
 
     plt.figure()
     scale1 = 1024
-    scale2 = 4*len(s_amp)
+    scale2 = 2*len(s_amp)
 
-    f, Pxx_spec = welch(s_amp, Fs_analog, nperseg=scale1, scaling='density', nfft=scale2)
-    # _, noise_spec = welch(noise, Fs_analog, nperseg=scale1, scaling='spectrum', nfft=scale2)
-    # _, s_rx_spec = welch(s_rx, Fs_analog, nperseg=scale1, scaling='spectrum', nfft=scale2)
+    f, Pxx_spec = welch(s_amp, Fs_analog, nperseg=scale1, scaling='spectrum', nfft=scale2, return_onesided = True)
+    _, noise_spec = welch(noise, Fs_analog, nperseg=scale1, scaling='spectrum', nfft=scale2)
+    _, s_rx_spec = welch(s_rx, Fs_analog, nperseg=scale1, scaling='spectrum', nfft=scale2)
 
-    Pxx_dB=10*np.log10(Pxx_spec*len(s_amp))
-    # noise_spec_dB= 10*np.log10(noise_spec)
-    # s_rx_spec_dB = 10*np.log10(s_rx_spec)
+    Pxx_dB=10*np.log10(Pxx_spec*2.5)
+    noise_spec_dB= 10*np.log10(noise_spec)
+    s_rx_spec_dB = 10*np.log10(s_rx_spec*2.5)
 
     plt.plot(f, Pxx_dB, label='Tx signal')
-    # plt.plot(f, noise_spec_dB, label='Noise')
-    # plt.plot(f, s_rx_spec_dB, label='Rx signal', alpha=0.6)
+    plt.plot(f, noise_spec_dB, label='Noise')
+    plt.plot(f, s_rx_spec_dB, label='Rx signal', alpha=0.6)
     plt.xlabel('frequency [Hz]')
     plt.ylabel('Signal Power [dB]')
     # plt.ylim(bottom=0)
-    plt.xlim(left=0, right=Fc2+100e6)
+    plt.xlim(left=0, right=Fc2+40e6)
     plt.grid()
     plt.legend()
     plt.show()
