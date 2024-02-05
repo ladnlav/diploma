@@ -2,6 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import welch
+import matplotlib.patches as patches
 
 # modules
 from IQ_map_demap import IQ_LUT
@@ -32,7 +33,8 @@ def OFDM_symbol(QAM_payload, K, N, Nfft):
     return symbols
 
 def IDFT(OFDM_data,Nfft,N):
-    return np.fft.ifftn(OFDM_data,[Nfft,N])
+    OFDM_data2 = np.fft.ifftshift(OFDM_data,0)
+    return np.fft.ifftn(OFDM_data2,[Nfft,N])
 
 def power_set(signal, Sig_pow_dB):
     Sig_pow = 10**(Sig_pow_dB/10)
@@ -79,18 +81,19 @@ def PS(bits):
 
 def main():
     ### Parameters setting
-    Fc1 = 100e3 # in Hz n25 band carrier frequency
-    Fc2 = 100e3 # in Hz n66 band carrier frequency
+    Fc1 = 15e3 # in kHz n25 band carrier frequency
+    Fc2 = 15e3 # in kHz n66 band carrier frequency
 
-    df = 1e3 # scs in Hz
-    Nfft = 2048*2
     K = 64 # number of used OFDM subcarriers
+    df = 2*5/K*1e3 # scs in kHz, 2*Occupied_bandwidth/Subcarrier_num*1e3
+    Nfft = int(2048*2)
+
 
     B = df*int(Nfft/2) # bandwidth in Hz
-    print("Current Bandwidth: ", B)
-    print("Current Occupied Bandwidth: ", df*int(K/2))
+    print("Current Bandwidth: in kHz", B)
+    print("Current Occupied Bandwidth: in kHz", df*int(K/2))
     Fs = B         # sampling frequency
-    N = 1000           # number of OFDM symbols transmitted
+    N = 100           # number of OFDM symbols transmitted
 
     ### Power
     Sig_pow_dB = 90 # signal power in dB
@@ -103,7 +106,7 @@ def main():
     payloadBits_per_OFDM = K*mu  # number of payload bits per OFDM symbol
 
     ##### Bits generation
-    np.random.seed(64)
+    np.random.seed(6)
     bits = np.random.binomial(n=1, p=0.5, size=(payloadBits_per_OFDM, N))
 
     ##### S/P
@@ -135,33 +138,56 @@ def main():
 
     # Power setting
     s_amp = power_set(s, Sig_pow_dB)
-    # s_amp = s
-    noise, s_rx = channel(s_amp,noise_dB)
-    
-    plt.figure()
-    scale1 = 800
-    scale2 = 1024
+    nperseg = 1024
 
-    f, Pxx_spec = welch(np.transpose(s_amp), Fs, nperseg=scale1, nfft=scale2, return_onesided=False)
-    _, noise_spec = welch(np.transpose(noise), Fs, nperseg=scale1, nfft=scale2, return_onesided=False)
-    _, s_rx_spec = welch(np.transpose(s_rx), Fs, nperseg=scale1, nfft=scale2, return_onesided=False)
+    s_amp=s_amp*np.sqrt(2*K/Nfft)  # normalization for FFT
+
+    noise, s_rx = channel(s_amp,noise_dB)
+
+    f, Pxx_spec = welch(np.transpose(s_amp), Fs, nperseg=nperseg, nfft=Nfft, return_onesided=False)
+    _, noise_spec = welch(np.transpose(noise), Fs, nperseg=nperseg, nfft=Nfft, return_onesided=False)
+    _, s_rx_spec = welch(np.transpose(s_rx), Fs, nperseg=nperseg, nfft=Nfft, return_onesided=False)
 
     Pxx_spec = np.mean(Pxx_spec,0)
     noise_spec = np.mean(noise_spec,0)
     s_rx_spec = np.mean(s_rx_spec,0)
 
-    Pxx_dB=10*np.log10(np.abs(Pxx_spec)*Fs*np.sqrt((1/len(Pxx_spec))))
+    Pxx_dB=10*np.log10(np.abs(Pxx_spec)*Fs)
     noise_spec_dB= 10*np.log10(np.abs(noise_spec)*Fs)
-    s_rx_spec_dB = 10*np.log10(np.abs(s_rx_spec)*Fs*np.sqrt((1/len(Pxx_spec))))
+    s_rx_spec_dB = 10*np.log10(np.abs(s_rx_spec)*Fs)
     
-
-    plt.plot(np.fft.fftshift(f),Pxx_dB, label='Tx signal')
-    plt.plot(np.fft.fftshift(f), noise_spec_dB, label='Noise')
-    plt.plot(np.fft.fftshift(f), s_rx_spec_dB, label='Rx signal', alpha=0.6)
-    plt.xlabel('frequency [Hz]')
-    plt.ylabel('Signal Power [dB]')
+    plt.figure()
+    shift = 800e3 # in kHz
+    f_MHz = (f+shift) / 1e3
+    
+    plt.plot(np.fft.fftshift(f_MHz), np.fft.fftshift(Pxx_dB), label='Tx signal')
+    plt.plot(np.fft.fftshift(f_MHz), np.fft.fftshift(noise_spec_dB), label='Noise')
+    plt.plot(np.fft.fftshift(f_MHz), np.fft.fftshift(s_rx_spec_dB), label='Rx signal', alpha=0.6)
+    plt.xlabel('frequency [MHz]')
+    plt.ylabel('Signal Power $V^2/Hz$ [dB]')
     # plt.ylim(bottom=0)
-    # plt.xlim(left=-Fc1-40e6, right=Fc1+40e6)
+    plt.xlim(left=(-2*Fc1+shift)/1e3, right=(2*Fc2+shift)/1e3)
+
+    # Specify the UP-link bandwidth
+    bandwidth_up = 70 # in MHz
+    Fc_up = (Fc1+shift)/1e3-1.5*bandwidth_up # in MHz
+    up_band = patches.Rectangle((Fc_up - bandwidth_up / 2, plt.ylim()[0]),
+                               bandwidth_up, plt.ylim()[1] - plt.ylim()[0],
+                               linewidth=1, edgecolor='black', facecolor='blue',alpha = 0.5, label='UL band')
+    plt.gca().add_patch(up_band)
+
+    # Specify the DL-link bandwidth
+    bandwidth_dl = 70 # in MHz
+    Fc_dl = (shift)/1e3 # in MHz
+    dl_band = patches.Rectangle((Fc_dl - bandwidth_dl / 2, plt.ylim()[0]),
+                               bandwidth_dl, plt.ylim()[1] - plt.ylim()[0],
+                               linewidth=1, edgecolor='black', facecolor='red',alpha = 0.2, label='DL band')
+    plt.gca().add_patch(dl_band)
+
+
+    #custom_bins = np.arange((-2*Fc1+shift)/1e3, (2*Fc2+shift)/1e3, 5)
+    custom_bins = np.arange(np.min(f_MHz), np.max(f_MHz), 5)
+    plt.xticks(custom_bins, rotation='vertical')
     plt.grid()
     plt.legend()
     plt.show()
