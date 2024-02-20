@@ -184,8 +184,6 @@ def main():
                                linewidth=1, edgecolor='black', facecolor='red',alpha = 0.2, label='DL band')
     plt.gca().add_patch(dl_band)
 
-
-    #custom_bins = np.arange((-2*Fc1+shift)/1e3, (2*Fc2+shift)/1e3, 5)
     custom_bins = np.arange(np.min(f_MHz), np.max(f_MHz), 5)
     plt.xticks(custom_bins, rotation='vertical')
     plt.grid()
